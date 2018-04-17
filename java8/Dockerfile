@@ -18,6 +18,8 @@ RUN apk --update add curl ca-certificates tar bash \
     && curl -Ls https://github.com/sgerrand/alpine-pkg-glibc/releases/download/2.23-r3/glibc-2.23-r3.apk > /tmp/glibc-2.23-r3.apk \
     && apk add --allow-untrusted /tmp/glibc-2.23-r3.apk
 
+RUN apk add rsync openssh
+
 ENV JAVA_DOWNLOAD=
 RUN mkdir -p /opt && curl -jfksSLH "Cookie: oraclelicense=accept-securebackup-cookie" \
       "${JAVA_DOWNLOAD:-$(curl -s https://lv.binarybabel.org/catalog-api/java/jdk8.txt?p=downloads.tgz)}" \
