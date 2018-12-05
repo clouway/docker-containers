@@ -5,7 +5,7 @@ MAINTAINER Telcong Dev <telcong@clouway.com>
 
 # Java Version and other ENV
 ENV JAVA_VERSION_MAJOR=8 \
-    JAVA_VERSION_MINOR=121 \
+    JAVA_VERSION_MINOR=141 \
     JAVA_VERSION_BUILD=13 \
     JAVA_PACKAGE=jdk \
     JAVA_JCE=standard \
