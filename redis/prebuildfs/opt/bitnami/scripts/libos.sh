@@ -141,8 +141,49 @@ am_i_root() {
     if [[ "$(id -u)" = "0" ]]; then
         true
     else
-	false
+        false
     fi
+}
+
+########################
+# Print OS metadata
+# Arguments:
+#   $1 - Flag name
+# Flags:
+#   --id - Distro ID
+#   --version - Distro version
+#   --branch - Distro branch
+#   --codename - Distro codename
+# Returns:
+#   String
+#########################
+get_os_metadata() {
+    local -r flag_name="${1:?missing flag}"
+    # Helper function
+    get_os_release_metadata() {
+        local -r env_name="${1:?missing environment variable name}"
+        (
+            . /etc/os-release
+            echo "${!env_name}"
+        )
+    }
+    case "$flag_name" in
+        --id)
+            get_os_release_metadata ID
+            ;;
+        --version)
+            get_os_release_metadata VERSION_ID
+            ;;
+        --branch)
+            get_os_release_metadata VERSION_ID | sed 's/\..*//'
+            ;;
+        --codename)
+            get_os_release_metadata VERSION_CODENAME
+            ;;
+        *)
+            error "Unknown flag ${flag_name}"
+            return 1
+    esac
 }
 
 ########################
@@ -345,6 +386,20 @@ generate_random_string() {
 #   md5 hash - string
 #########################
 generate_md5_hash() {
-  local -r str="${1:?missing input string}"
-  echo -n "$str" | md5sum | awk '{print $1}'
+    local -r str="${1:?missing input string}"
+    echo -n "$str" | md5sum | awk '{print $1}'
+}
+
+########################
+# Create sha1 hash from a string
+# Arguments:
+#   $1 - string
+#   $2 - algorithm - 1 (default), 224, 256, 384, 512
+# Returns:
+#   sha1 hash - string
+#########################
+generate_sha_hash() {
+    local -r str="${1:?missing input string}"
+    local -r algorithm="${2:-1}"
+    echo -n "$str" | "sha${algorithm}sum" | awk '{print $1}'
 }
