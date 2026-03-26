@@ -1,0 +1,5 @@
+registry: clouway
+image: redis
+tag: 6.2.2-debian-10-r4-search
+platforms:
+  - linux/amd64

@@ -1,0 +1,5 @@
+registry: clouway
+image: firestore-emulator
+tag: alpine
+platforms:
+  - linux/amd64

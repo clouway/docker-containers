@@ -1,0 +1,5 @@
+registry: clouway
+image: redis-cluster
+tag: 6.2.6-debian-10-r24-search
+platforms:
+  - linux/amd64

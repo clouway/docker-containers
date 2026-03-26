@@ -1,0 +1,5 @@
+registry: clouway
+image: gcloud-datastore-emulator
+tag: "0.0.1"
+platforms:
+  - linux/arm64

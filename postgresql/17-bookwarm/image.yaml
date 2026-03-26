@@ -1,0 +1,6 @@
+registry: europe-west3-docker.pkg.dev/cwregistry/base
+image: postgresql
+tag: 17-bookworm-timescaledb
+platforms:
+  - linux/amd64
+  - linux/arm64

@@ -1,0 +1,5 @@
+registry: clouway
+image: java11
+tag: jdk-alpine
+platforms:
+  - linux/amd64

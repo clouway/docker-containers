@@ -1,0 +1,5 @@
+registry: clouway
+image: golang
+tag: tesseract
+platforms:
+  - linux/amd64

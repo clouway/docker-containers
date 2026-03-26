@@ -1,0 +1,5 @@
+registry: clouway
+image: java11
+tag: zulu-alpine
+platforms:
+  - linux/amd64

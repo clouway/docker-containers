@@ -1,0 +1,5 @@
+registry: clouway
+image: java17
+tag: jre-jammy
+platforms:
+  - linux/arm64

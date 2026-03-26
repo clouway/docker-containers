@@ -1,0 +1,146 @@
+name: Build and Push Docker Images
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+
+permissions:
+  contents: read
+  id-token: write  # needed for GCP Workload Identity Federation
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # 1. Discover which image directories changed
+  # ---------------------------------------------------------------------------
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      images: ${{ steps.find.outputs.images }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Find changed image directories
+        id: find
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE=${{ github.event.pull_request.base.sha }}
+          else
+            BASE=${{ github.event.before }}
+          fi
+
+          # On first push (e.g. new branch) fall back to diffing against HEAD~1
+          if [ "$BASE" = "0000000000000000000000000000000000000000" ]; then
+            BASE=$(git rev-parse HEAD~1 2>/dev/null || echo "")
+          fi
+
+          # Collect unique image dirs that contain an image.yaml
+          IMAGES="[]"
+          if [ -n "$BASE" ]; then
+            DIRS=$(git diff --name-only "$BASE" HEAD \
+              | xargs -I{} dirname {} \
+              | sort -u)
+          else
+            # Fallback: build everything
+            DIRS=$(find . -name image.yaml -exec dirname {} \; | sed 's|^\./||' | sort -u)
+          fi
+
+          JSON="["
+          FIRST=true
+          for DIR in $DIRS; do
+            # Walk up to find the nearest image.yaml
+            CHECK="$DIR"
+            while [ "$CHECK" != "." ] && [ ! -f "$CHECK/image.yaml" ]; do
+              CHECK=$(dirname "$CHECK")
+            done
+            [ ! -f "$CHECK/image.yaml" ] && continue
+
+            # Avoid duplicates
+            if echo "$JSON" | grep -q "\"dir\":\"$CHECK\""; then
+              continue
+            fi
+
+            if [ "$FIRST" = true ]; then
+              FIRST=false
+            else
+              JSON="$JSON,"
+            fi
+            JSON="$JSON{\"dir\":\"$CHECK\"}"
+          done
+          JSON="$JSON]"
+
+          echo "images=$JSON" >> "$GITHUB_OUTPUT"
+          echo "Will build: $JSON"
+
+  # ---------------------------------------------------------------------------
+  # 2. Build (and optionally push) each changed image
+  # ---------------------------------------------------------------------------
+  build:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.images != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ${{ fromJson(needs.detect-changes.outputs.images) }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read image.yaml
+        id: meta
+        run: |
+          DIR="${{ matrix.image.dir }}"
+          echo "dir=$DIR" >> "$GITHUB_OUTPUT"
+
+          # Parse image.yaml (lightweight, no yq dependency)
+          REGISTRY=$(grep '^registry:' "$DIR/image.yaml" | awk '{print $2}')
+          IMAGE=$(grep '^image:' "$DIR/image.yaml" | awk '{print $2}')
+          TAG=$(grep '^tag:' "$DIR/image.yaml" | awk '{print $2}' | tr -d '"')
+          PLATFORMS=$(grep '^ *- ' "$DIR/image.yaml" | awk '{print $2}' | paste -sd,)
+
+          echo "registry=$REGISTRY"   >> "$GITHUB_OUTPUT"
+          echo "image=$IMAGE"         >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG"             >> "$GITHUB_OUTPUT"
+          echo "platforms=$PLATFORMS"  >> "$GITHUB_OUTPUT"
+
+          FULL_IMAGE="$REGISTRY/$IMAGE:$TAG"
+          echo "full_image=$FULL_IMAGE" >> "$GITHUB_OUTPUT"
+          echo "Building $FULL_IMAGE ($PLATFORMS) from $DIR"
+
+      # ---- GCP Artifact Registry auth (only when pushing) ----
+      - name: Authenticate to Google Cloud
+        if: github.event_name == 'push' && startsWith(steps.meta.outputs.registry, 'europe-west3-docker.pkg.dev')
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Configure Docker for GCP Artifact Registry
+        if: github.event_name == 'push' && startsWith(steps.meta.outputs.registry, 'europe-west3-docker.pkg.dev')
+        run: gcloud auth configure-docker europe-west3-docker.pkg.dev --quiet
+
+      # ---- Docker Hub auth (only when pushing) ----
+      - name: Login to Docker Hub
+        if: github.event_name == 'push' && !startsWith(steps.meta.outputs.registry, 'europe-west3-docker.pkg.dev')
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # ---- Build ----
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ steps.meta.outputs.dir }}
+          platforms: ${{ steps.meta.outputs.platforms }}
+          push: ${{ github.event_name == 'push' }}
+          tags: ${{ steps.meta.outputs.full_image }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

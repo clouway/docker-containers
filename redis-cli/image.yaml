@@ -1,0 +1,5 @@
+registry: clouway
+image: redis-cli
+tag: "6.2.4"
+platforms:
+  - linux/amd64
