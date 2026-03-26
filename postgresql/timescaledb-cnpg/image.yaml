@@ -1,0 +1,6 @@
+registry: clouway
+image: timescaledb-cnpg
+tag: 17-bookworm
+platforms:
+  - linux/amd64
+  - linux/arm64

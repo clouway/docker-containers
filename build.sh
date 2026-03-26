@@ -23,7 +23,7 @@ parse_yaml() {
   REGISTRY=$(grep '^registry:' "$file" | awk '{print $2}')
   IMAGE=$(grep '^image:' "$file" | awk '{print $2}')
   TAG=$(grep '^tag:' "$file" | awk '{print $2}' | tr -d '"')
-  PLATFORMS=$(grep '^ *- ' "$file" | awk '{print $2}' | paste -sd,)
+  PLATFORMS=$(grep '^ *- ' "$file" | awk '{print $2}' | tr '\n' ',' | sed 's/,$//')
   FULL_IMAGE="$REGISTRY/$IMAGE:$TAG"
 }
 
@@ -45,19 +45,22 @@ build_image() {
   echo "     Context:   $dir"
   echo "     Platforms: $PLATFORMS"
 
-  local push_flag=""
   if [ "$push" = "true" ]; then
-    push_flag="--push"
-    echo "     Push:      yes"
+    echo "     Push:      yes (multi-arch)"
+    docker buildx build \
+      --platform "$PLATFORMS" \
+      -t "$FULL_IMAGE" \
+      --push \
+      "$dir"
   else
-    echo "     Push:      no (use --push to push)"
+    # Local build: use --load with the current machine's platform only
+    # (--load does not support multi-platform)
+    echo "     Push:      no (local build, use --push for multi-arch)"
+    docker buildx build \
+      --load \
+      -t "$FULL_IMAGE" \
+      "$dir"
   fi
-
-  docker buildx build \
-    --platform "$PLATFORMS" \
-    -t "$FULL_IMAGE" \
-    $push_flag \
-    "$dir"
 
   echo ""
 }
